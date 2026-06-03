@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: bronze
+
+    database: DBT_DE_PROJECT
+    schema: BRONZE
+
+    tables:
+      - name: ORDERS_RAW
