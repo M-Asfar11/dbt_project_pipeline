@@ -1,0 +1,88 @@
+CREATE WAREHOUSE OrdersWarehouse
+    WAREHOUSE_SIZE = 'X-SMALL'
+    AUTO_SUSPEND = 60
+    AUTO_RESUME = TRUE;
+
+CREATE DATABASE DBT_DE_PROJECT;
+USE DATABASE DBT_DE_PROJECT;
+
+CREATE SCHEMA BRONZE;
+CREATE SCHEMA SILVER;
+CREATE SCHEMA GOLD;
+
+SHOW SCHEMAS;
+
+-----------------------------
+
+CREATE OR REPLACE TABLE BRONZE.ORDERS_RAW(
+    OrderID INTEGER,
+    CustomerID INTEGER,
+    ItemName VARCHAR(50),
+    Quantity INTEGER, 
+    Price DOUBLE, 
+    Date DATE, 
+    Status VARCHAR(50)    
+);
+
+
+CREATE OR REPLACE FILE FORMAT BRONZE.CSV_FORMAT
+TYPE = 'CSV' 
+FIELD_DELIMITER = ","
+RECORD_DELIMITER = '\n'
+SKIP_HEADER = 1
+NULL_IF = ('', 'NULL', 'null')
+EMPTY_FIELD_AS_NULL = TRUE 
+DATE_FORMAT = "YYYY-MM-DD";
+
+Show file formats;
+
+
+CREATE OR REPLACE STORAGE INTEGRATION S3_int
+        Type = External_stage
+        Storage_provider = S3 
+        enabled = True 
+    Storage_aws_role_arn = 'arn:aws:iam::339954341521:role/AWS_Proj_Ingestion'
+    Storage_allowed_locationS = ('s3://mydbt-project-bucket/bronze/', 's3://mydbt-project-bucket/gold/'
+    );
+
+DESC INTEGRATION S3_INT;
+
+
+CREATE OR REPLACE STAGE BRONZE.S3_BRONZE_STAGE
+FILE_FORMAT = BRONZE.CSV_FORMAT
+Storage_integration = S3_int
+URL = "s3://mydbt-project-bucket/bronze/";
+
+USE SCHEMA BRONZE;
+LIST @S3_BRONZE_STAGE;
+
+COPY INTO BRONZE.ORDERS_RAW
+FROM @S3_BRONZE_STAGE;
+
+SELECT * FROM ORDERS_RAW;
+
+
+SELECT *
+FROM STG_ORDERS;
+
+SHOW TABLES IN SCHEMA BRONZEDBT_DE_PROJECT;
+
+select * from BRONZE_GOLD.CUSTOMER_SALES;
+
+CREATE OR REPLACE STAGE GOLD.gold_stage
+url = "s3://mydbt-project-bucket/gold/"
+STORAGE_INTEGRATION = S3_int;
+
+DESC INTEGRATION S3_INT;
+
+COPY INTO @GOLD.gold_stage/customer_sales
+FROM DBT_DE_PROJECT.GOLD.CUSTOMER_SALES
+FILE_FORMAT = (
+    TYPE = CSV
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+)
+HEADER = TRUE
+OVERWRITE = TRUE
+SINGLE = TRUE;
+
+LIST @GOLD.gold_stage;
